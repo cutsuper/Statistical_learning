@@ -1,0 +1,162 @@
+---
+title: "Solution to SVM Example"
+author: "You"
+date: "Today"
+output:
+  pdf_document: default
+  word_document: default
+  html_document:
+    df_print: paged
+---
+
+# Load packages
+```{r}
+if (!requireNamespace("tidyverse")) install.packages('tidyverse')
+if (!requireNamespace("caret")) install.packages('caret')
+
+library(tidyverse)
+library(caret)
+```
+
+Question 1
+
+```{r}
+data <- read.csv('Titanic.csv')
+data <- subset(data, select = -c(PassengerId,Name,Ticket,Cabin))
+# Remember we have added "PassengerId" into the removal list
+data <- subset(data, is.na(Age) == FALSE)
+data$Survived <- as.factor(data$Survived)
+
+# Pclass as a categorical predictor
+data$Pclass = as.factor(data$Pclass)
+
+# Standardize 'Age' and 'Fare'
+data$Age = scale(data$Age)
+data$Fare = scale(data$Fare)
+
+dim(data)[1] # 714 passengers
+
+set.seed(123)
+training.samples <- data$Survived %>%
+  createDataPartition(p = 0.75, list = FALSE)
+train.data  <- data[training.samples, ]
+test.data <- data[-training.samples, ]
+str(train.data) # 536 obs
+str(test.data) # 178 obs
+```
+
+Question 2
+
+```{r}
+# Fit the model on the training set
+set.seed(123)
+model <- train(
+  Survived ~., data = train.data, method = "svmLinear",
+  trControl = trainControl("cv", number = 10),
+  # preProcess = c("center","scale")
+  # This will scale all the predictors in the model
+  )
+
+# Make predictions on the test data
+predicted.classes <- model %>% predict(test.data)
+head(predicted.classes)
+
+# Confusion matrix
+confusionMatrix(factor(predicted.classes), factor(test.data$Survived), positive = '1')
+
+# Accuracy 0.7978
+test.data_pred = cbind(test.data, predicted.classes)
+str(test.data_pred)
+```
+
+Question 3
+
+```{r}
+# Fit the model on the training set
+set.seed(123)
+model <- train(
+  Survived ~., data = train.data, method = "svmLinear",
+  trControl = trainControl("cv", number = 10),
+  tuneGrid = expand.grid(C = seq(0.1, 2, length = 19))
+  )
+
+# Plot model accuracy vs different values of Cost
+plot(model)
+
+# Print the best tuning parameter C that
+# maximizes model accuracy
+model$bestTune
+
+# Here you can directly use the fitted model
+# Or you can refit a model using the best tuning parameter
+#set.seed(123)
+#model <- train(
+#  Survived ~., data = train.data, method = "svmLinear",
+#  trControl = trainControl("cv", number = 10),
+#  tuneGrid = expand.grid(C = 0.1)
+#  )
+
+# Make predictions on the test data
+predicted.classes <- model %>% predict(test.data)
+
+# Confusion matrix
+confusionMatrix(factor(predicted.classes), factor(test.data$Survived), positive = '1')
+
+# Accuracy 0.7978
+```
+
+Question 4
+
+```{r}
+# Fit the model on the training set
+set.seed(123)
+model <- train(
+  Survived ~., data = train.data, method = "svmRadial",
+  trControl = trainControl("cv", number = 10),
+  tuneLength = 10
+  )
+# Print the best tuning parameter sigma and C that
+# maximizes model accuracy
+model$bestTune
+
+# Make predictions on the test data
+predicted.classes <- model %>% predict(test.data)
+
+# Confusion matrix
+confusionMatrix(factor(predicted.classes), factor(test.data$Survived), positive = '1')
+
+# Accuracy 0.8146
+```
+
+Question 5
+
+```{r}
+# Fit the model on the training set
+set.seed(123)
+model <- train(
+  Survived ~., data = train.data, method = "svmPoly",
+  trControl = trainControl("cv", number = 10),
+  tuneLength = 4
+  )
+# Print the best tuning parameter sigma and C that
+# maximizes model accuracy
+model$bestTune
+
+# Make predictions on the test data
+predicted.classes <- model %>% predict(test.data)
+
+# Confusion matrix
+confusionMatrix(factor(predicted.classes), factor(test.data$Survived), positive = '1')
+
+# Accuracy 0.809
+```
+
+Question 6
+
+Overall accuracy rate:
+
+Linear: 0.7978
+
+Radial basis kernel: 0.8146 (the best)
+
+Polynomial kernel: 0.809

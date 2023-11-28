@@ -1,0 +1,198 @@
+---
+title: "LSTM_HW_solutions"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r}
+library(tidyverse)
+library(tidyquant)
+library(magrittr)
+library(keras)
+library(tensorflow)
+library(zoo)
+library(caret)
+```
+
+Q1.
+
+```{r}
+data <- read.csv('AAPL.csv', header = T)
+# transform the data type from 'chr' to 'Date'
+data$Date = as.Date(data$Date)
+
+# visualize our dataset
+knitr::kable(head(data))
+ggplot(data, aes(x=Date, y = Close)) + geom_line()
+
+# normalize the stock price by using the 'min-max scaler'
+data$min_lagged = lag(data$Low)
+data$max_lagged = lag(data$High)
+data$Close_norm = (data$Close - data$min_lagged) / (data$max_lagged - data$min_lagged)
+model_data = matrix(data$Close_norm[-1])
+knitr::kable(tail(model_data,10))
+```
+
+Q2.
+
+```{r}
+train_data = head(model_data,-10)
+test_data = tail(model_data, 20)
+cat(dim(train_data)[1], 'days are divided into the training set.')
+```
+
+Q3.
+
+```{r}
+prediction = 10
+lag = prediction
+# Training X
+# we lag the data 10 times and arrange that into columns
+train_X = t(sapply(
+    1:(length(train_data) - lag - prediction + 1),
+    function(x) train_data[x:(x + lag - 1), 1]
+  ))
+# now we transform it into 3D form
+train_X <- array(
+    data = as.numeric(unlist(train_X)),
+    dim = c(
+        nrow(train_X),
+        lag,
+        1
+    )
+)
+# Training y
+train_y <- t(sapply(
+    (1 + lag):(length(train_data) - prediction + 1),
+    function(x) train_data[x:(x + prediction - 1)]
+))
+train_y <- array(
+    data = as.numeric(unlist(train_y)),
+    dim = c(
+        nrow(train_y),
+        prediction,
+        1
+    )
+)
+# Testing X
+test_X = t(sapply(
+    1:(length(test_data) - lag - prediction + 1),
+    function(x) test_data[x:(x + lag - 1), 1]
+  ))
+test_X <- array(
+    data = as.numeric(unlist(test_X)),
+    dim = c(
+        nrow(test_X),
+        lag,
+        1
+    )
+)
+# Testing y
+test_y <- t(sapply(
+    (1 + lag):(length(test_data) - prediction + 1),
+    function(x) test_data[x:(x + prediction - 1)]
+))
+test_y <- array(
+    data = as.numeric(unlist(test_y)),
+    dim = c(
+        nrow(test_y),
+        prediction,
+        1
+    )
+)
+dim(train_X)
+dim(train_y)
+dim(test_X)
+dim(test_y)
+```
+
+Q4.
+
+```{r}
+set_random_seed(123)
+model <- keras_model_sequential()
+model %>%
+  layer_lstm(units = 200, input_shape = dim(train_X)[2:3])
+model %>%
+  layer_dense(units = dim(test_y)[2])
+
+summary(model)
+model %>% compile(loss = 'mse',
+                  optimizer = 'adam',
+                  metrics = 'mse')
+history <- model %>% fit(
+  x = train_X,
+  y = train_y,
+  batch_size =16,
+  epochs = 50,
+  validation_split = 0.1,
+  shuffle = FALSE
+)
+
+preds_norm = t(predict(model, test_X))
+preds_complete = cbind(preds_norm, tail(data, prediction))
+preds = preds_complete$preds_norm*(preds_complete$max_lagged - preds_complete$min_lagged) + preds_complete$min_lagged
+predictions = data.frame(predictions = preds, true = preds_complete$Close, date = preds_complete$Date)
+# Test MSE
+(MSE.lstm = RMSE(predictions$true, predictions$predictions)^2)
+
+# Plot 10-days forecast
+ggplot(data = predictions, aes(x = date)) +
+  geom_line(aes(y = predictions, color = 'predictions')) +
+  geom_line(aes(y = true, color = 'true'))
+
+# 1-day forecast
+# stock price of 3-29
+preds_norm1 = predict(model, test_y)[1]
+(preds1 = preds_norm1*(data$High[253] - data$Low[253]) + data$Low[253])
+```
+
+Q5.
+
+```{r}
+set_random_seed(123)
+model <- keras_model_sequential()
+model %>%
+  layer_simple_rnn(units = 200, input_shape = dim(train_X)[2:3])
+model %>%
+  layer_dense(units = dim(test_y)[2])
+
+summary(model)
+model %>% compile(loss = 'mse',
+                  optimizer = 'adam',
+                  metrics = c('mse'))
+history <- model %>% fit(
+  x = train_X,
+  y = train_y,
+  batch_size =16,
+  epochs = 50,
+  validation_split = 0.1,
+  shuffle = FALSE
+)
+
+preds_norm = t(predict(model, test_X))
+preds_complete = cbind(preds_norm, tail(data, prediction))
+preds = preds_complete$preds_norm*(preds_complete$max_lagged - preds_complete$min_lagged) + preds_complete$min_lagged
+predictions = data.frame(predictions = preds, true = preds_complete$Close, date = preds_complete$Date)
+# Test MSE
+(MSE.rnn = RMSE(predictions$true, predictions$predictions)^2)
+
+# Plot 10-days forecast
+ggplot(data = predictions, aes(x = date)) +
+  geom_line(aes(y = predictions, color = 'predictions')) +
+  geom_line(aes(y = true, color = 'true'))
+
+# 1-day forecast
+# stock price of 3-29
+preds_norm1 = predict(model, test_y)[1]
+(preds1 = preds_norm1*(data$High[253] - data$Low[253]) + data$Low[253])
+```
+
+Test MSE of LSTM and RNN:
+```{r}
+MSE.lstm
+MSE.rnn
+```
+
+Here the LSTM algorithm in Question 4 is better.

@@ -1,0 +1,119 @@
+---
+title: "CART"
+---
+
+When dealing with a classification problem, you’re looking for opportunities to exploit a pattern in the data. It’s also very important to note that, for decision trees, you’re looking for linear patterns.
+
+```{r}
+if (!requireNamespace("tidyverse")) install.packages('tidyverse')
+if (!requireNamespace("caret")) install.packages('caret')
+if (!requireNamespace("rpart")) install.packages('rpart')
+if (!requireNamespace("rpart.plot")) install.packages('rpart.plot')
+if (!requireNamespace("rattle")) install.packages('rattle')
+if (!requireNamespace("xlsx")) install.packages('xlsx')
+library(tidyverse)
+library(caret)
+library(rpart)
+library(rpart.plot)
+library(rattle)
+library(xlsx)
+
+banknote <- read.csv('banknote.csv')
+banknote <- na.omit(banknote)
+cat('There are', nrow(banknote), 'observations left.')
+banknote$class <- as.factor(banknote$class)
+
+set.seed(123)
+training.samples <- banknote$class %>% 
+  createDataPartition(p = 0.8, list = FALSE)
+train.data  <- banknote[training.samples, ]
+test.data <- banknote[-training.samples, ]
+```
+
+DT
+
+```{r}
+# Basic tree with default parameters
+model <- rpart(class ~., data = train.data)
+# The default splitting method for classification is 'gini'
+# To define the split criteria, you use parms=list(split='...')
+par(xpd = NA)
+fancyRpartPlot(model) # rattle pkg
+pred1 <- predict(model,newdata = test.data, type ='class')
+pred1 <- ifelse(pred1 == 1, 1, 0)
+confusionMatrix(factor(pred1), factor(test.data$class), positive = '1') # caret pkg
+
+rpart.plot(model) # another way to print the decision tree
+print(model) # a simple summary of your model at each split
+printcp(model) # the improvement in cost complexity at each node (cp table)
+summary(model) # the most descriptive output (cp table, var importance, descriptions of the node and split)
+head(predict(model,newdata = test.data, type ='class'))
+head(predict(model,newdata = test.data, method ='class'))
+```
+
+**Minsplit, Minbucket, Maxdepth**
+One of the benefits of decision tree training is that you can stop training based on several thresholds.
+1. The option minbucket provides the smallest number of observations that are allowed in a terminal node. If a split decision breaks up the data into a node with less than the minbucket, it won’t accept it.
+2. The minsplit parameter is the smallest number of observations in the parent node that could be split further. The default is 20. If you have less than 20 records in a parent node, it is labeled as a terminal node.
+
+```{r}
+model <- rpart(class ~., data = train.data, maxdepth = 3, minsplit = 10, minbucket = 1)
+par(xpd = NA)
+fancyRpartPlot(model)
+```
+
+**CP (Complexity Parameter)**
+The complexity parameter (cp) in rpart is the minimum improvement in the model needed at each node
+The cp value is a stopping parameter. It helps speed up the search for splits because it can identify splits that don’t meet this criteria and prune them before going too far.
+```{r}
+# default cp = 0.01
+model <- rpart(class ~., data = train.data, cp = 0) # cp=0, full grown, overfit
+par(xpd = NA)
+fancyRpartPlot(model)
+```
+
+**Loss Matrix**
+
+            Predicted
+Actual         Class1  Class2
+        Class1     TP      FN
+        Class2     FP      TN
+```{r}
+matrix(c(0,1,5,0), byrow = T, nrow = 2)
+# So for this given situation, it’s 5 times worse to generate a false positive than a false negative. This will have the effect of making Class1 predicted less frequently.
+model <- rpart(class ~., data = train.data, parms = list(loss = matrix(c(0,1,5,0), byrow = T, nrow = 2)))
+par(xpd = NA)
+fancyRpartPlot(model)
+```
+
+
+
+```{r}
+set.seed(123)
+# train (caret)
+# sets up a grid of tuning parameters for a number of classification and regression routines, fits each model and calculates a resampling based performance measure.
+model2 <- train(
+  class ~., data = train.data, method = "rpart",
+  trControl = trainControl("cv", number = 10),
+  tuneLength = 100) # 100: an integer denoting the number of levels for each tuning parameters that should be generated
+plot(model2)
+model2$bestTune
+fancyRpartPlot(model2$finalModel)
+pred2 <- predict(model2, newdata = test.data)
+pred2 <- ifelse(pred2 == 1, 1, 0)
+confusionMatrix(factor(pred2), factor(test.data$class), positive = '1')
+```
+
+Logistic
+
+```{r}
+model3 <- glm(class ~ . , data = train.data, family = binomial)
+probabilities <- model3 %>% predict(test.data, type = "response") 
+# The type="response" option tells R to output probabilities of the form P(Y = 1|X)
+model3 %>% predict(test.data)
+# Thus for a default binomial model the default predictions are of log-odds (probabilities on logit scale) and type = "response" gives the predicted probabilities.
+# type = "response" is used in glm models and type = "class" is used in rpart models(CART).
+
+pred3 <- ifelse(probabilities > 0.5, 1, 0)
+confusionMatrix(factor(pred3), factor(test.data$class), positive = '1')
+```

@@ -1,0 +1,76 @@
+---
+title: "Solutions_example2"
+output: pdf_document
+---
+
+```{r}
+library(tidyverse)
+library(caret)
+library(randomForest)
+
+# Load the data
+data("Boston", package = "MASS")
+```
+
+Question 1
+```{r}
+# 1 Find the sample size
+nrow(Boston)
+```
+
+Question 2
+```{r}
+# 2 Split the data into training and test set
+set.seed(123)
+training.samples <- Boston$medv %>%
+  createDataPartition(p = 0.8, list = FALSE)
+train.data  <- Boston[training.samples, ]
+test.data <- Boston[-training.samples, ]
+str(train.data)
+str(test.data)
+```
+
+Question 3
+```{r}
+# 3 Fit the model on the training set
+set.seed(123)
+model <- train(
+  medv ~., data = train.data, method = "rf",
+  trControl = trainControl("cv", number = 10)
+)
+# Best tuning parameter mtry
+model$bestTune
+model
+```
+
+Question 4
+```{r}
+# 4 Make predictions on the test data
+predictions <- model %>% predict(test.data)
+head(predictions)
+
+# Compute the average prediction error RMSE
+RMSE(predictions, test.data$medv)
+```
+
+
+Question 5
+```{r}
+# 5 Evaluate variable importance
+set.seed(123)
+rf <- randomForest(medv ~ ., data=Boston, ntree=500, mtry=7,keep.forest=FALSE,importance=TRUE)
+rf
+sqrt(rf$mse[500])
+importance(rf)
+#varImp(rf, type = 2)
+varImpPlot(rf) 
+```
+
+Question 6
+```{r}
+12/3
+
+# p is the number of predictors
+#p/3 for regression and sqrt(p) for classification
+# 4 variables to select
+```

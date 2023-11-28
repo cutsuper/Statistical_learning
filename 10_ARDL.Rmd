@@ -1,0 +1,79 @@
+---
+title: "ARDL"
+author: "Weihao Wang"
+output: pdf_document
+---
+
+ARDL creates complex autoregressive distributed lag (ARDL) models and constructs the underlying unrestricted and restricted error correction model (ECM) automatically, just by providing the order. It also performs the bounds-test for cointegration as described in Pesaran et al. (2001) and provides the multipliers and the cointegrating equation. The validity and the accuracy of this package have been verified by successfully replicating the results of Pesaran et al. (2001) in Natsiopoulos and Tzeremes (2022).
+
+```{r}
+# install.packages("ARDL")
+# install.packages("devtools")
+# devtools::install_github("Natsiopoulos/ARDL")
+library(ARDL)
+data(denmark)
+head(denmark)
+
+data(br_month)
+```
+
+First, we find the best ARDL specification. We search up to order 5.
+
+```{r}
+models <- auto_ardl(LRM ~ LRY + IBO + IDE, data = denmark, max_order = 5, selection = 'AIC')
+# It searches for the best ARDL order specification, according to the selected criterion, taking into account the constraints provided
+
+# The top 20 models according to the AIC
+models$top_orders
+models$best_order
+
+# The best model was found to be the ARDL(3,1,3,2)
+ardl_3132 <- models$best_model
+ardl_3132$order
+summary(ardl_3132)
+```
+
+The UECM (Unrestricted Error Correction Model) of the underlying ARDL(3,1,3,2):
+
+```{r}
+uecm_3132 <- uecm(ardl_3132)
+summary(uecm_3132)
+```
+
+The RECM (Restricted Error Correction Model) of the underlying ARDL(3,1,3,2):
+allowing the constant to join the long-run relationship, instead of the short-run
+
+```{r}
+recm_3132 <- recm(uecm_3132, case = 2)
+summary(recm_3132)
+```
+
+Test if there is a long-run levels relationship (cointegration) using the bounds test from Pesaran et al. (2001).
+
+```{r}
+# The bounds F-test (under the case 2) rejects the NULL hypothesis (let's say, assuming alpha = 0.01) with p-value = 0.004418.
+bounds_f_test(ardl_3132, case = 2)
+
+# The bounds t-test (under the case 3) rejects the NULL hypothesis (let's say, assuming alpha = 0.01) with p-value = 0.005538.
+# We also provide the critical value bounds for alpha = 0.01.
+tbounds <- bounds_t_test(uecm_3132, case = 3, alpha = 0.01)
+tbounds
+
+# Here is a more clear view of the main results.
+tbounds$tab
+```
+
+Forecasting and using an ardl, uecm, or recm model in other functions are easy as they can be converted in regular lm models.
+
+```{r}
+ardl_3132_lm <- to_lm(ardl_3132) # convert ardl into an lm model
+
+# Forecast using the in-sample data
+insample_data <- ardl_3132$model
+predicted_values <- predict(ardl_3132_lm, newdata = insample_data)
+
+# Convert to ts class for the plot
+predicted_values <- ts(predicted_values, start = c(1974,4), frequency=4)
+plot(denmark$LRM, lwd=2) #The input dependent variable
+lines(predicted_values, col="red", lwd=2) #The predicted values
+```

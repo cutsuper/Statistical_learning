@@ -1,0 +1,148 @@
+---
+title: "Neural Networks, Regression Task, Exercise."
+author: "name"
+date: "xx/xx/xxxx"
+output:
+  pdf_document: default
+  html_document: default
+  word_document: default
+---
+
+1. Divide the data into 75% training and 25% testing & normalize the data
+
+```{r}
+if (!requireNamespace("tidyverse")) install.packages('tidyverse')
+if (!requireNamespace("caret")) install.packages('caret')
+if (!requireNamespace("neuralnet")) install.packages('neuralnet')
+
+library(tidyverse)
+library(caret)
+library(neuralnet)
+library(MASS)
+
+data("Boston")
+data = Boston
+data <- subset(data, select = -c(rad))
+# mean & standard deviation of the response
+mean = mean(data$medv)
+sd = sd(data$medv)
+# normalize the data
+data = data.frame(scale(data))
+
+set.seed(123)
+training.samples <- data$medv %>%
+  createDataPartition(p = 0.75, list = FALSE)
+train.data  <- data[training.samples, ]
+test.data <- data[-training.samples, ]
+str(train.data) # 381 obs
+str(test.data) # 125 obs
+```
+
+2. NN model with (i) no hidden layer, (ii) the default loss function of 'sse', and (iii) the default activation function of 'identity'. 
+
+```{r}
+set.seed(123)
+nn = neuralnet(medv~., data = train.data, hidden = 0, err.fct = "sse", linear.output = T)
+plot(nn, rep = 'best')
+
+pr.nn0 = predict(nn, test.data)
+# Test MSE
+(MSE.nn.1 = RMSE(test.data$medv*sd+mean, pr.nn0*sd+mean)^2)
+```
+
+3. NN model with (i) one hidden layer with 3 neurons, (ii) the default loss function of 'sse', and (iii) the default activation function of 'identity'.
+
+```{r}
+set.seed(123)
+nn = neuralnet(medv~., data = train.data, hidden = 3, err.fct = "sse", linear.output = T)
+plot(nn, rep = 'best')
+
+pr.nn1 = predict(nn, test.data)
+# Test MSE
+(MSE.nn.2 = RMSE(test.data$medv*sd+mean, pr.nn1*sd+mean)^2)
+```
+
+4. MLR model
+
+```{r}
+set.seed(123)
+mlr = lm(medv~., data = train.data)
+summary(mlr)
+pr.mlr = predict(mlr, test.data)
+# Test MSE
+(MSE.mlr = RMSE(test.data$medv*sd+mean, pr.mlr*sd+mean)^2)
+
+# Compare MSE
+print(paste(MSE.nn.1, MSE.nn.2, MSE.mlr))
+
+# Compare with multiple linear regression
+# summarize the predictions from different models
+final1 <- data.frame(predictions_NN0=pr.nn0*sd+mean, predictions_NN1=pr.nn1*sd+mean,predictions_MLR =pr.mlr*sd+mean, actual_response=test.data$medv*sd+mean)
+knitr::kable(head(final1))
+attach(final1)
+
+# NN model with no hidden layer, with one hidden layer with 3 neurons and MLR vs. the true values
+plot(actual_response,predictions_NN0,col="red", ylab = 'predicted house price', xlab = 'true values of the house price')
+points(actual_response,predictions_NN1,col="blue")
+points(actual_response,predictions_MLR,col="green")
+abline(a = 0, b = 1)
+
+# NN model with one hidden layer with 3 neurons vs. MLR
+plot(predictions_MLR,predictions_NN0,col="blue", ylab = 'predictons of NN with no hidden layer', xlab = 'predictons of MLR')
+abline(a = 0, b = 1)
+```
+
+5. NN model with (i) one hidden layer with 3 neurons, (ii) the default loss function of “sse”, and (iii) the output layer with the default activation function of 'identity', but the hidden layer with the activation function of 'relu'.
+
+```{r}
+# devtools::install_github('rstudio/cloudml')
+library(keras)
+library(dplyr)
+library(cloudml)
+
+train_x = subset(train.data, select = -medv)
+train_x_s = scale(train_x)
+train_y = as.matrix(subset(train.data, select = medv))
+test_x = subset(test.data, select = -medv)
+test_x_s = scale(test_x)
+test_y = as.matrix(subset(test.data, select = medv))
+
+set.seed(123)
+model <- keras_model_sequential() 
+model %>% layer_dense(units = 12, activation = 'relu', input_shape = c(12)) %>% 
+  layer_dense(units = 3, activation = "relu") %>%
+  layer_dense(units = 1, activation = "linear")
+model %>% compile(loss='mse',optimizer='adam',metrics='mse')
+summary(model)
+history = model %>% fit(train_x_s,train_y, epochs=100,batch_size = 8,validation_split = 0.1)
+plot(history)
+preds <- predict(model, test_x_s)
+
+# test MSE
+RMSE(test.data$medv*sd+mean, preds*sd+mean)^2
+
+# Compare with multiple linear regression
+final2 <- data.frame(predictions_NN_RELU=preds*sd+mean,predictions_MLR =pr.mlr*sd+mean, actual_response=test_y*sd+mean)
+knitr::kable(head(final2))
+attach(final2)
+plot(actual_response*sd+mean,predictions_NN_RELU*sd+mean,col="red", ylab = 'predictions', xlab = 'actual response')
+points(actual_response*sd+mean,predictions_MLR*sd+mean,col="green")
+abline(a = 0, b = 1)
+```
+
+**guidance of how to deal with binary string variables**
+
+The variable 'w4' in Quiz 7 is a string variable (Y/N), you can clean it in this way
+```{r}
+(w4 = c(rep('Y',5), rep('N',5)))
+# replace 'Y' with 1 and 'N' with 0:
+library(dplyr)
+(w4 = ifelse(w4 == 'N', 0,1))
+```
+
+keras example
+https://www.datatechnotes.com/2019/01/regression-example-with-keras-in-r.html
+
+python installation
+https://www.dataquest.io/blog/installing-python-on-mac/
+https://phoenixnap.com/kb/how-to-install-python-3-windows

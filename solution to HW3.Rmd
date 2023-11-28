@@ -1,0 +1,107 @@
+---
+title: "Solution to HW3"
+author: "Your name"
+date: "02/15/2023"
+output: pdf_document
+---
+
+# Problem 1
+Loading packages and data
+```{r}
+if (!requireNamespace("tidyverse")) install.packages('tidyverse')
+if (!requireNamespace("caret")) install.packages('caret')
+if (!requireNamespace("rpart")) install.packages('rpart')
+if (!requireNamespace("rattle")) install.packages('rattle')
+if (!requireNamespace("xlsx")) install.packages('xlsx')
+library(tidyverse)
+library(caret)
+library(rpart)
+library(rattle)
+library(xlsx)
+```
+
+# Problem 1
+## Reading Data
+```{r}
+banknote <- read.csv('banknote.csv')
+banknote <- na.omit(banknote)
+cat('There are', nrow(banknote), 'observations left.')
+banknote$class <- as.factor(banknote$class)
+```
+
+## Split Data
+```{r}
+set.seed(123)
+training.samples <- banknote$class %>% 
+  createDataPartition(p = 0.8, list = FALSE)
+train.data  <- banknote[training.samples, ]
+test.data <- banknote[-training.samples, ]
+```
+
+# Problem 2
+
+## fit model
+```{r}
+model <- rpart(class ~., data = train.data, control = rpart.control(cp=0))
+par(xpd = NA)
+fancyRpartPlot(model)
+```
+## Confusion matrix
+```{r}
+pred1 <- predict(model,newdata = test.data, type ='class')
+pred1 <- ifelse(pred1 == 1, 1, 0)
+
+confusionMatrix(factor(pred1), factor(test.data$class), positive = '1')
+```
+
+# Problem 3
+```{r}
+set.seed(123)
+model2 <- train(
+  class ~., data = train.data, method = "rpart",
+  trControl = trainControl("cv", number = 10),
+  tuneLength = 100)
+plot(model2)
+```
+
+```{r}
+model2$bestTune
+```
+
+```{r}
+fancyRpartPlot(model2$finalModel)
+```
+
+# Problem 4
+
+## confusion matrix
+```{r}
+pred2 <- predict(model2, newdata = test.data)
+pred2 <- ifelse(pred2 == 1, 1, 0)
+
+confusionMatrix(factor(pred2), factor(test.data$class), positive = '1')
+```
+
+# Problem 5
+
+```{r}
+model3 <- glm(class ~ . , data = train.data, family = binomial)
+probabilities <- model3 %>% predict(test.data, type = "response")
+pred3 <- ifelse(probabilities > 0.5, 1, 0)
+
+confusionMatrix(factor(pred3), factor(test.data$class), positive = '1')
+```
+
+# Problem 6
+
+
+```{r}
+update.test = cbind(test.data, pred1, pred2, pred3)
+write.xlsx(update.test, 'testdata.xlsx', sheetName = 'sheet1')
+
+pred = cbind(pred1, pred2, pred3)
+pred.m = apply(pred,1,function(x) names(which.max(table(x)))) # Majority vote
+pred.m = as.numeric(pred.m)
+
+confusionMatrix(factor(pred.m), factor(test.data$class), positive = '1')
+```

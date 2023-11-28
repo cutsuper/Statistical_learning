@@ -1,0 +1,57 @@
+---
+title: "Solution to HW1"
+author: "Your name"
+date: "02/13/2023"
+output: pdf_document
+---
+
+# Load packages and data
+```{r}
+if (!requireNamespace("tidyverse")) install.packages('tidyverse')
+if (!requireNamespace("caret")) install.packages('caret')
+if (!requireNamespace("leaps")) install.packages('leaps')
+if (!requireNamespace("bestglm")) install.packages('bestglm')
+if (!requireNamespace("MASS")) install.packages('MASS')
+
+library(tidyverse)
+library(caret)
+library(leaps)
+library(bestglm)
+library(MASS)
+```
+
+```{r}
+banknote <- read.csv('banknote.csv')
+banknote <- na.omit(banknote)
+str(banknote)
+```
+
+# Problem 1
+## Question (a)
+```{r}
+set.seed(123)
+training.samples <- banknote$class %>% 
+  createDataPartition(p = 0.8, list = FALSE)
+train.data  <- banknote[training.samples, ]
+test.data <- banknote[-training.samples, ]
+```
+
+
+## Question (b)
+```{r}
+banknote$class <- as.factor(banknote$class)
+model <- glm(class ~ . , data = train.data, family = binomial)
+summary(model)
+```
+
+## Question (c)
+### prediction
+```{r}
+probabilities <- model %>% predict(test.data, type = "response")
+predicted.classes <- ifelse(probabilities > 0.5, 1, 0)
+```
+
+### confusion matrix
+```{r}
+confusionMatrix(factor(predicted.classes), factor(test.data$class), positive = '1')
+```

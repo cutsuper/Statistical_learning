@@ -1,0 +1,62 @@
+---
+title: "Solution to HW1"
+author: "Your name"
+date: "02/13/2023"
+output:
+  pdf_document: default
+  html_document:
+    df_print: paged
+---
+
+# Load packages and data
+```{r}
+if (!requireNamespace("tidyverse")) install.packages('tidyverse')
+if (!requireNamespace("caret")) install.packages('caret')
+if (!requireNamespace("leaps")) install.packages('leaps')
+if (!requireNamespace("bestglm")) install.packages('bestglm')
+if (!requireNamespace("MASS")) install.packages('MASS')
+
+library(tidyverse)
+library(caret)
+library(leaps)
+library(bestglm)
+library(MASS)
+```
+
+```{r}
+data <- read.csv('data.csv')
+data <- na.omit(data)
+data <- data[,-1]
+data$Tennis[data$Tennis == 'Yes'] = 1
+data$Tennis[data$Tennis == 'No'] = 0
+data$Tennis = as.numeric(data$Tennis)
+data[,1:4] = lapply(data[,1:4], factor)
+
+str(data)
+```
+
+# Problem 1
+## Question (a)
+```{r}
+train.data  <- data[1:14,]
+test.data <- data[15:20,]
+```
+
+
+## Question (b)
+```{r}
+model <- glm(Tennis ~ . , data = train.data, family = binomial)
+summary(model)
+```
+
+## Question (c)
+### prediction
+```{r}
+probabilities <- model %>% predict(test.data, type = "response")
+predicted.classes <- ifelse(probabilities > 0.5, 1, 0)
+```
+
+### confusion matrix
+```{r}
+confusionMatrix(factor(predicted.classes), factor(test.data$Tennis), positive = '1')
+```

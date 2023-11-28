@@ -1,0 +1,87 @@
+---
+title: "Solution to CART Example"
+author: "You"
+date: "Today"
+output: pdf_document
+---
+# Problem 1
+Loading packages and data
+```{r}
+if (!requireNamespace("caTools")) install.packages('caTools')
+if (!requireNamespace("tidyverse")) install.packages('tidyverse')
+if (!requireNamespace("caret")) install.packages('caret')
+if (!requireNamespace("rpart")) install.packages('rpart')
+if (!requireNamespace("rattle")) install.packages('rattle')
+if (!requireNamespace("xlsx")) install.packages('xlsx')
+library(caTools)
+library(tidyverse)
+library(caret)
+library(rpart)
+library(rattle)
+library(xlsx)
+```
+
+Reading Data
+```{r}
+Data <- read.csv('Titanic.csv')
+Data <- subset(Data, select = -c(Name,Ticket,Cabin))
+Data <- subset(Data, !is.na(Age))
+cat('There are', nrow(Data), 'passengers left.')
+Data$Survived <- as.factor(Data$Survived)
+```
+
+
+Split Data
+```{r}
+set.seed(123)
+training.samples <- Data$Survived %>% 
+  createDataPartition(p = 0.8, list = FALSE)
+train.data  <- Data[training.samples, ]
+test.data <- Data[-training.samples, ]
+```
+
+# Problem 2
+
+```{r}
+model <- rpart(Survived ~., data = train.data, control = rpart.control(cp=0))
+par(xpd = NA)
+fancyRpartPlot(model)
+```
+```{r}
+pred <- predict(model,newdata = test.data, type ='class')
+pred1 <- ifelse(pred == 1, 1,0)
+confusionMatrix(factor(pred1), factor(test.data$Survived), positive = '1')
+```
+
+# Problem 3
+
+```{r}
+set.seed(123)
+model2 <- train(
+  Survived ~., data = train.data, method = "rpart",
+  trControl = trainControl("cv", number = 10),
+  tuneLength = 100)
+plot(model2)
+```
+```{r}
+model2$bestTune
+```
+```{r}
+fancyRpartPlot(model2$finalModel)
+```
+
+# Problem 4
+
+```{r}
+pred <- predict(model2, newdata = test.data)
+pred2 <- ifelse(pred == 1, 1,0)
+confusionMatrix(factor(pred2), factor(test.data$Survived), positive = '1')
+```
+
+
+```{r}
+new_test = cbind(test.data, pred1, pred2)
+write.xlsx(new_test, 'testdata.xlsx', sheetName = 'sheet1')
+
+table(pred1, pred2)
+```

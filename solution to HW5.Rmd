@@ -1,0 +1,82 @@
+---
+title: "solutions to HW5"
+author: "Weihao Wang"
+date: "2023-03-07"
+output: pdf_document
+---
+
+```{r}
+library(tidyverse)
+library(caret)
+library(randomForest)
+```
+
+Question 1
+```{r}
+data <- read.csv('Titanic.csv')
+data <- subset(data, select = -c(PassengerId,Name,Ticket,Cabin))
+# Remember we have added "PassengerId" into the removal list
+data <- subset(data, is.na(Age) == FALSE)
+data$Survived <- as.factor(data$Survived)
+str(data)
+dim(data)[1] # 714 passengers
+
+set.seed(123)
+split <- data$Survived %>% 
+createDataPartition(p = 0.75, list = FALSE)
+train <- data[split,]
+test <- data[-split,]
+str(train) #536
+str(test) #178
+```
+
+Question 2
+```{r}
+set.seed(123)
+model <- train(
+  Survived ~., data = train, method = "rf",
+  trControl = trainControl("cv", number = 10),
+  importance = TRUE
+  )
+# Best tuning parameter
+model$bestTune
+model$finalModel
+```
+
+Sensitivity (predicted == 1|Survived == 1)
+```{r}
+138/(80+138)
+```
+Specificity (predicted == 0|Survived == 0)
+```{r}
+284/(284+34)
+```
+Accuracy
+```{r}
+(138+284)/(138+284+80+34)
+```
+
+Question 3
+```{r}
+pred <- model %>% predict(test)
+confusionMatrix(factor(pred), factor(test$Survived))
+```
+
+Question 4
+```{r}
+# Plot MeanDecreaseAccuracy
+varImpPlot(model$finalModel, type = 1)
+# Plot MeanDecreaseGini
+varImpPlot(model$finalModel, type = 2)
+```
+
+Question 5
+```{r}
+varImp(model)
+```
+
+Question 6
+variable number
+```{r}
+sqrt(36)
+```

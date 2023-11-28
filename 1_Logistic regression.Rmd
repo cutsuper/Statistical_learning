@@ -1,0 +1,64 @@
+---
+title: "Logistic Regression"
+author: "Weihao Wang"
+date: "2023-02-13"
+---
+
+
+# Load packages and data
+```{r}
+if (!requireNamespace("tidyverse")) install.packages('tidyverse')
+if (!requireNamespace("caret")) install.packages('caret')
+if (!requireNamespace("leaps")) install.packages('leaps')
+if (!requireNamespace("bestglm")) install.packages('bestglm')
+if (!requireNamespace("MASS")) install.packages('MASS')
+
+library(tidyverse)
+library(caret)
+library(leaps)
+library(bestglm)
+library(MASS)
+
+
+banknote <- read.csv('banknote.csv')
+banknote <- na.omit(banknote)
+str(banknote)
+
+
+
+set.seed(123)
+training.samples <- banknote$class %>% 
+  createDataPartition(p = 0.8, list = FALSE)
+train.data  <- banknote[training.samples, ]
+test.data <- banknote[-training.samples, ]
+
+banknote$class <- as.factor(banknote$class)
+
+# FUll model
+full.model <- glm(class ~ . , data = train.data, family = binomial)
+
+# STEP AIC
+#model <- glm(class~., data = train.data, family = binomial) %>% stepAIC(trace = F)
+model.step <- full.model %>% stepAIC(trace = F)
+coef(model.step)
+summary(model.step)
+
+# backwards
+backwards <- step(full.model)
+
+# forwards
+nothing <- glm(class ~ 1, data = train.data, family = binomial)
+forwards <- step(nothing, scope = list(lower = formula(nothing), upper = formula(full.model)), direction = 'forward')
+
+
+probabilities <- model %>% predict(test.data, type = "response")
+predicted.classes <- ifelse(probabilities > 0.5, 1, 0)
+confusionMatrix(factor(predicted.classes), factor(test.data$class), positive = '1')
+```
+
+**Warning message: glm.fit: fitted probabilities numerically 0 or 1 occurred **
+This warning occurs when you fit a logistic regression model and the predicted probabilities of one or more observations in your data frame are indistinguishable from 0 or 1.
+
+1. Ignore it
+2. Increase the sample size
+3. Remove outliers

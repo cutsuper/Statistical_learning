@@ -1,0 +1,148 @@
+---
+title: "RNN & LSTM"
+author: "Weihao Wang"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+https://www.r-bloggers.com/2021/04/lstm-network-in-r/
+
+**1. RNN**
+
+Here we are trying to predict a cosine from a noisy sine wave.
+
+```{r}
+# Load libraries
+require(rnn)
+
+# Set seed for reproducibility purposes
+set.seed(10)
+
+# Set frequency
+f <- 5
+w <- 2*pi*f
+
+# Create sequences
+t <- seq(0.005,2,by=0.005)
+x <- sin(t*w) + rnorm(200, 0, 0.25)
+y <- cos(t*w)
+# X is essentially a sine wave with some normally distributed noise, while Y is a straightforward smooth cosine wave.
+
+X <- matrix(x, nrow = 40)
+Y <- matrix(y, nrow = 40)
+# The artificial dataset for this task is a set of 10 sequences each of which consists of 40 observations.
+
+
+# Plot noisy waves
+plot(as.vector(X), col='blue', type='l', ylab = "X,Y", main = "Noisy waves")
+lines(as.vector(Y), col = "red")
+legend("topright", c("X", "Y"), col = c("blue","red"), lty = c(1,1), lwd = c(1,1))
+
+# Standardize in the interval 0 - 1
+X <- (X - min(X)) / (max(X) - min(X))
+Y <- (Y - min(Y)) / (max(Y) - min(Y))
+# Standardize the data before fitting the model. When using any neural network model with real valued data, make sure not to avoid this step because if you do, then you might spend the next hour trying to figure out why the model did not converge or spitted out weird results.
+
+# Transpose
+X <- t(X)
+Y <- t(Y)
+
+# Training-testing sets
+train <- 1:8
+test <- 9:10
+
+# Train model. Keep out the last two sequences.
+model <- trainr(Y = Y[train,],
+                X = X[train,],
+                learningrate = 0.05,
+                hidden_dim = 16,
+                numepochs = 500)
+str(Y[train,])
+# Y:	array of output values, dim 1: samples (must be equal to dim 1 of X), dim 2: time (must be equal to dim 2 of X), dim 3: variables (could be 1 or more, if a matrix, will be coerce to array)
+# hidden_dim:	dimension(s) of hidden layer(s)
+# numepochs:	number of iteration, i.e. number of time the whole dataset is presented to the network
+
+
+# Predicted values
+Yp <- predictr(model, X)
+
+# Plot predicted vs actual. Training set + testing set
+plot(as.vector(t(Y)), col = 'red', type = 'l', main = "Actual vs predicted", ylab = "Y,Yp")
+lines(as.vector(t(Yp)), type = 'l', col = 'blue')
+legend("topright", c("Predicted", "Real"), col = c("blue","red"), lty = c(1,1), lwd = c(1,1))
+
+# Plot predicted vs actual. Testing set only.
+plot(as.vector(t(Y[test,])), col = 'red', type='l', main = "Actual vs predicted: testing set", ylab = "Y,Yp")
+lines(as.vector(t(Yp[test,])), type = 'l', col = 'blue')
+legend("topright", c("Predicted", "Real"), col = c("blue","red"), lty = c(1,1), lwd = c(1,1))
+```
+
+**1. LSTM**
+
+A special type of Recurrent Neural network is LSTM Networks.
+LSTM stands for long short-term memory.
+LSTM network helps to overcome gradient problems and makes it possible to capture long-term dependencies in the sequence of words or integers.
+
+```{r}
+library(keras)
+library(tensorflow)
+imdb <- dataset_imdb(num_words = 500)
+c(c(train_x, train_y), c(test_x, test_y)) %<-% imdb
+length(train_x); length(test_x)
+str(imdb$train$x)
+
+train_x <- pad_sequences(train_x, maxlen = 90)
+test_x <- pad_sequences(test_x, maxlen = 90)
+# If the dataset contains fewer number integers suppose 60 integers remaining 30 integers that is 0 will be added automatically.
+str(train_x)
+str(test_x)
+
+# Initiate model with keras function kera_model_sequantiall and embedded the recurrent neural network layers.
+model <- keras_model_sequential()
+model %>%
+  layer_embedding(input_dim = 500, output_dim = 32) %>%
+  layer_simple_rnn(units = 32) %>% 
+  layer_dense(units = 1, activation = "sigmoid")
+# Compile Model
+model %>% compile(optimizer = "rmsprop",
+                  loss = "binary_crossentropy",
+                  metrics = c("acc"))
+# Fit model
+history <- model %>% fit(train_x, train_y,
+                         epochs = 25,
+                         batch_size = 128,
+                         validation_split = 0.2)
+plot(history)
+# The top one is for loss and the second one is for accuracy, now you can see validation dataset loss is increasing and accuracy is decreasing from a certain epoch onwards. So this because of overfitting.
+
+
+
+model %>% evaluate(train_x, train_y) 
+pred <- model %>%   
+predict_classes(train_x) 
+table(Predicted=pred, Actual=imdb$train$y)
+
+model %>% evaluate(test_x, test_y) 
+pred1 <- model %>%   
+predict_classes(test_x) 
+table(Predicted=pred1, Actual=imdb$test$y)
+# In the training dataset, we got 86% of accuracy and it falls into 74% in the test dataset.
+
+# By adding more hidden layers or changing the max length for padding, we may get better results!
+```
+
+3 layers:
+
+model %>%
+  layer_embedding(input_dim = 500, output_dim = 32) %>%
+  layer_simple_rnn(units = 32,return_sequences = TRUE,activation = 'relu') %>% 
+  layer_simple_rnn(units = 32,return_sequences = TRUE,activation = 'relu') %>% 
+  layer_simple_rnn(units = 32) %>% 
+  layer_dense(units = 1, activation = "sigmoid")
+  
+max length of padding = 90:
+
+train_x <- pad_sequences(train_x, maxlen = 200)
+test_x <- pad_sequences(test_x, maxlen = 200)
+  

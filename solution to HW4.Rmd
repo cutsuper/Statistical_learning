@@ -1,0 +1,137 @@
+---
+title: "Solutions to HW4"
+author: "Weihao Wang"
+date: "2023-02-28"
+output: pdf_document
+---
+
+```{r}
+if (!requireNamespace("tidyverse")) install.packages('tidyverse')
+if (!requireNamespace("caret")) install.packages('caret')
+if (!requireNamespace("glmnet")) install.packages('glmnet')
+if (!requireNamespace("caTools")) install.packages('caTools')
+library(tidyverse)
+library(caret)
+library(glmnet)
+library(caTools)
+```
+
+# Problem 1&2
+
+```{r}
+data = read.csv('Ames_Housing_Data.csv')
+cat('There were', sum(is.na(data)), 'missing datapoints.')
+data = na.omit(data)
+
+set.seed(123)
+training.samples <- data$SalePrice %>% createDataPartition(p = 0.75, list = FALSE)
+train.data  <- data[training.samples, ]
+test.data <- data[-training.samples, ]
+dim(train.data) # 1097 obs
+dim(test.data) # 363 obs
+```
+
+# Problem 3
+
+(a)
+```{r}
+x <- model.matrix(SalePrice~., train.data)[,-1] 
+# creates a matrix by expanding factors to a set of dummy variables
+# Here to deal with 'CentralAir'
+y <- train.data$SalePrice
+cv <- cv.glmnet(x, y, alpha = 0)
+cv$lambda.min
+```
+
+Best lambda for ridge regression is 6452.856
+
+(b)
+```{r}
+model <- glmnet(x, y, alpha = 0, lambda = cv$lambda.min) # alpha=0: ridge
+coef(model)
+```
+
+(c)
+```{r}
+x.test <- model.matrix(SalePrice ~., test.data)[,-1]
+predictions <- model %>% predict(x.test) %>% as.vector()
+data.frame(
+  RMSE = RMSE(predictions, test.data$SalePrice),
+  Rsquare = R2(predictions, test.data$SalePrice)
+)
+
+plot(y = predictions,x = test.data$SalePrice, xlab='Observed response',ylab='Estimated response')
+abline(1,1)
+```
+RMSE is 46713.63 and coefficient of determination is 0.6691365.
+
+# Problem 4
+
+(a)
+```{r}
+cv <- cv.glmnet(x, y, alpha = 1)
+cv$lambda.min
+```
+
+Best lambda for LASSO is 352.4729
+
+(b)
+```{r}
+model <- glmnet(x, y, alpha = 1, lambda = cv$lambda.min) # alpha=1: lasso
+coef(model)
+```
+
+(c)
+```{r}
+x.test <- model.matrix(SalePrice ~., test.data)[,-1]
+predictions <- model %>% predict(x.test) %>% as.vector()
+
+data.frame(
+  RMSE = RMSE(predictions, test.data$SalePrice),
+  Rsquare = R2(predictions, test.data$SalePrice)
+)
+
+plot(y = predictions,x = test.data$SalePrice, xlab='Observed predictions',ylab='Estimated response')
+abline(1,1)
+```
+RMSE is 48460.31 and coefficient of determination is 0.6606179.
+
+# Problem 5
+
+(a)
+```{r}
+model <- train(
+  SalePrice ~., data = train.data, method = "glmnet",
+  trControl = trainControl("cv", number = 10),
+  tuneLength = 10
+)
+model$bestTune
+```
+
+(b)
+```{r}
+coef(model$finalModel, model$bestTune$lambda)
+```
+
+(c)
+```{r}
+model = glmnet(x,y,alpha = 0.1,lambda=849.1095)
+x.test <- model.matrix(SalePrice ~., test.data)[,-1]
+predictions <- model %>% predict(x.test)
+data.frame(
+  RMSE = RMSE(predictions, test.data$SalePrice),
+  Rsquare = R2(predictions, test.data$SalePrice)
+)
+
+plot(y = predictions,x = test.data$SalePrice, xlab='Observed predictions',ylab='Estimated response')
+abline(1,1)
+```
+RMSE is 48723.3 and coefficient of determination is 0.6591441.
+
+# Problem 6
+
+Ridge Regression model: RMSE is **46713.63** and coefficient of determination is **0.6691365**.
+LASSO model: RMSE is 48460.31 and coefficient of determination is 0.6606179.
+Elastic Net model: RMSE is 48723.3 and coefficient of determination is 0.6591441.
+
+Based on the RMSE and R-squared values, the best method for this set is the **ridge regression**.

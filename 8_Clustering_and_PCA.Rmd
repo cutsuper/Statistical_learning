@@ -1,0 +1,224 @@
+---
+title: "Clustering analysis & PCA"
+author: "Weihao Wang"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+**Clustering**
+
+**5 different types of clustering methods**
+
+1. Partitioning methods
+2. Hierarchical clustering
+3. Fuzzy clustering
+4. Density-based clustering
+5. Model-based clustering
+
+You can find more details here:
+
+https://www.datanovia.com/en/blog/types-of-clustering-methods-overview-and-quick-start-r-code/
+https://www.datanovia.com/en/lessons/fuzzy-clustering-essentials/
+https://www.datanovia.com/en/lessons/dbscan-density-based-clustering-essentials/
+https://www.datanovia.com/en/lessons/model-based-clustering-essentials/
+
+```{r}
+# Install the necessary packages first
+#install.packages("factoextra")
+#install.packages("cluster")
+#install.packages("magrittr")
+#install.packages("NbClust")
+
+library("cluster")
+library("factoextra")
+library("magrittr")
+
+#install.packages('rattle')
+data(wine, package='rattle')
+head(wine)
+data1 = scale(wine[-1])
+data2 = scale(mtcars)
+```
+
+**1. Partitioning clustering**
+
+```{r}
+# Firstly, determining the optimal number of clusters
+fviz_nbclust(data1, kmeans, method = "gap_stat")
+# Determines and visualize the optimal number of clusters using different methods: within cluster sums of squares, average silhouette and gap statistics.
+# From the plot, the suggested number of cluster: 3
+
+# Compute and visualize k-means clustering
+set.seed(123)
+km.res <- kmeans(data1, 3)
+# Visualize
+library("factoextra")
+fviz_cluster(km.res, data = data1,
+             ellipse.type = "convex",
+             palette = "jco",
+             ggtheme = theme_minimal())
+
+# Provides ggplot2-based elegant visualization of partitioning methods including kmeans [stats package]; pam, clara and fanny [cluster package]; dbscan [fpc package]; Mclust [mclust package]; HCPC [FactoMineR]; hkmeans [factoextra]. 
+
+# Another way: k-medoids/pam clustering
+# !!!(less sensitive to outliers compared to k-means)
+# Compute PAM
+library("cluster")
+pam.res <- pam(data1, 3) # partitioning around medoids
+# Visualize
+fviz_cluster(pam.res)
+
+
+# dataset2: mtcars
+fviz_nbclust(data2, kmeans, method = "gap_stat")
+km.res <- kmeans(data2, 2, nstart = 25)
+library("factoextra")
+fviz_cluster(km.res, data = data2,
+             ellipse.type = "convex",
+             palette = "jco",
+             ggtheme = theme_minimal())
+pam.res <- pam(data2, 2)
+fviz_cluster(pam.res)
+
+result = prcomp(data2, center = TRUE,scale. = TRUE)
+result
+summary(result)
+```
+
+**2. Hierarchical clustering**
+
+```{r}
+# This method does not require to pre-specifiy the number of clusters
+# Compute hierarchical clustering
+res.hc <- data1 %>%
+  scale() %>%                    # Scale the data
+  dist(method = "euclidean") %>% # Compute dissimilarity matrix
+  hclust(method = "ward.D2")     # Compute hierachical clustering
+
+# Visualize using factoextra
+# Cut in 3 groups and color by groups
+fviz_dend(res.hc, k = 3, # Cut in four groups
+          cex = 0.5, # label size
+          k_colors = c("#2E9FDF", "#00AFBB", "#E7B800"),
+          color_labels_by_k = TRUE, # color labels by groups
+          rect = TRUE # Add rectangle around groups
+          )
+# You can use different number of groups as you wish
+
+# dataset2: mtcars
+res.hc <- data2 %>%
+  scale() %>%
+  dist(method = "euclidean") %>%
+  hclust(method = "ward.D2") 
+fviz_dend(res.hc, k = 2, # Cut in four groups
+          cex = 0.5, # label size
+          k_colors = c("#2E9FDF", "#00AFBB"),
+          color_labels_by_k = TRUE, # color labels by groups
+          rect = TRUE # Add rectangle around groups
+          )
+```
+
+**3. Fuzzy clustering**
+
+```{r}
+# An alternative way to k-means
+library(cluster)
+library(factoextra)
+res.fanny <- fanny(data2, 2)  # Compute fuzzy clustering with k = 2
+fviz_cluster(res.fanny, ellipse.type = "norm", repel = TRUE,
+             palette = "jco", ggtheme = theme_minimal(),
+             legend = "right")
+fviz_silhouette(res.fanny, palette = "jco",
+                ggtheme = theme_minimal())
+```
+
+**4. Density-based clustering**
+
+```{r}
+#install.packages("fpc")
+#install.packages("dbscan")
+#install.packages("factoextra")
+# data1 and data2 are not representative here
+# Load the data 
+data("multishapes", package = "factoextra")
+df <- multishapes[, 1:2]
+
+# find out an eps value
+dbscan::kNNdistplot(data2, k =  3)
+abline(h = 3, lty = 2)
+
+# Compute DBSCAN using fpc package
+library("fpc")
+set.seed(123)
+db <- fpc::dbscan(data2, eps = 3, MinPts = 5)
+# Generates a density based clustering of arbitrary shape as introduced in Ester et al. (1996).
+# eps: Reachability distance
+# MinPts: Reachability minimum no. of points
+
+# Plot DBSCAN results
+library("factoextra")
+fviz_cluster(db, data = data2, stand = FALSE,
+             ellipse = FALSE, show.clust.cent = FALSE,
+             geom = "point",palette = "jco", ggtheme = theme_classic())
+# Not good
+
+# A better example
+data("multishapes")
+df <- multishapes[, 1:2]
+set.seed(123)
+km.res <- kmeans(df, 5, nstart = 25)
+fviz_cluster(km.res, df,  geom = "point", 
+             ellipse= FALSE, show.clust.cent = FALSE,
+             palette = "jco", ggtheme = theme_classic())
+```
+
+**5. Model-based clustering**
+
+```{r}
+# data1: wine data
+#install.packages("mclust")
+library(mclust)
+mc1 = Mclust(data1) # Model-based-clustering
+# Model-based clustering based on parameterized finite Gaussian mixture models. Models are estimated by EM algorithm initialized by hierarchical model-based agglomerative clustering. The optimal model is then selected according to BIC.
+
+summary(mc1) 
+# the number of cluster: 3
+
+library(factoextra)
+# BIC values used for choosing the number of clusters
+fviz_mclust(mc1, "BIC", palette = "jco")
+# Classification: plot showing the clustering
+fviz_mclust(mc1, "classification", geom = "point", 
+            pointsize = 1.5, palette = "jco")
+# Classification uncertainty
+fviz_mclust(mc1, "uncertainty", palette = "jco")
+```
+
+
+**PCA**
+
+
+```{r}
+#install.packages("devtools")
+library(devtools)
+#install_github("vqv/ggbiplot")
+library(ggbiplot)	 	
+
+mtcars.pca = prcomp(mtcars[,c(1:7,10,11)], center = TRUE,scale. = TRUE)
+summary(mtcars.pca)
+# Proportion of variance
+# You obtain 9 principal components, which you call PC1-PC9. Each of these explains a percentage of the total variation in the dataset. That is to say: PC1 explains 63% of the total variance, which means that nearly two-thirds of the information in the dataset (9 variables) can be encapsulated by just that one Principal Component. PC2 explains 23% of the variance. So, by knowing the position of a sample in relation to just PC1 and PC2, you can get a very accurate view on where it stands in relation to other samples, as just PC1 and PC2 can explain 86% of the variance.
+ggbiplot(mtcars.pca)
+# The axes are seen as arrows originating from the center point. Here, you see that the variables hp, cyl, and disp all contribute to PC1, with higher values in those variables moving the samples to the right on this plot. This lets you see how the data points relate to the axes, but it's not very informative without knowing which point corresponds to which sample (car).
+ggbiplot(mtcars.pca, labels=rownames(mtcars))
+# This will name each point with the name of the car in question
+# Now you can see which cars are similar to one another. For example, the Maserati Bora, Ferrari Dino and Ford Pantera L all cluster together at the top. This makes sense, as all of these are sports cars.
+mtcars.country <- c(rep("Japan", 3), rep("US",4), rep("Europe", 7),rep("US",3), "Europe", rep("Japan", 3), rep("US",4), rep("Europe", 3), "US", rep("Europe", 3))
+ggbiplot(mtcars.pca,ellipse=TRUE,  labels=rownames(mtcars), groups=mtcars.country)
+# the American cars form a distinct cluster to the right. Looking at the axes, you see that the American cars are characterized by high values for cyl, disp, and wt. Japanese cars, on the other hand, are characterized by high mpg. European cars are somewhat in the middle and less tightly clustered than either group.
+ggbiplot(mtcars.pca,ellipse=TRUE, choices=c(3,4), labels=rownames(mtcars), groups=mtcars.country)
+ggbiplot(mtcars.pca,ellipse=TRUE,circle=TRUE, labels=rownames(mtcars), groups=mtcars.country)
+
+mtcars.pca$rotation[,1] #PC1
+```

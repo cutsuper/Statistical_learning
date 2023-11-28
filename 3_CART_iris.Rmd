@@ -1,0 +1,66 @@
+---
+title: "CART (iris)"
+output: pdf_document
+---
+
+1. Use the random seed 123 to divide the cleaned data into 80% training and 20% testing. 
+```{r}
+if (!requireNamespace("tidyverse")) install.packages('tidyverse')
+if (!requireNamespace("caret")) install.packages('caret')
+if (!requireNamespace("rpart")) install.packages('rpart')
+if (!requireNamespace("rpart.plot")) install.packages('rpart.plot')
+if (!requireNamespace("rattle")) install.packages('rattle')
+if (!requireNamespace("nnet")) install.packages('nnet')
+library(tidyverse)
+library(caret)
+library(rpart)
+library(rpart.plot)
+library(rattle)
+library(nnet)
+
+data('iris')
+data = iris
+str(data)
+
+set.seed(123)
+training.samples <- data$Species %>% 
+  createDataPartition(p = 0.8, list = FALSE)
+train.data  <- data[training.samples, ]
+test.data <- data[-training.samples, ]
+```
+
+2. Fully grown tree
+```{r}
+# Basic tree with default parameters
+model <- rpart(Species ~., data = train.data, cp = 0)
+# The default splitting method for Speciesification is 'gini'
+# To define the split criteria, you use parms=list(split='...')
+par(xpd = NA)
+fancyRpartPlot(model) # rattle pkg
+rpart.plot(model) # another way to print the decision tree
+pred1 <- predict(model,newdata = test.data, type ='class')
+confusionMatrix(factor(pred1), factor(test.data$Species))
+```
+
+3 & 4. Prune the fully grown tree using the training set with 10_fold CV
+```{r}
+set.seed(123)
+model2 <- train(
+  Species ~., data = train.data, method = "rpart",
+  trControl = trainControl("cv", number = 10),
+  tuneLength = 100)
+plot(model2)
+model2$bestTune
+fancyRpartPlot(model2$finalModel)
+
+pred2 <- predict(model2, newdata = test.data)
+confusionMatrix(factor(pred2), factor(test.data$Species))
+```
+
+5. Multinomial logistic regression
+```{r}
+model3 <- multinom(Species ~ . , data = train.data)
+coef(model3)
+pred3 <- model3 %>% predict(test.data, type = "class") 
+confusionMatrix(factor(pred3), factor(test.data$Species))
+```

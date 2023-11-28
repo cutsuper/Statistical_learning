@@ -1,0 +1,198 @@
+---
+title: "Exercise, Penalized Regression"
+author: "Ian"
+date: "2023/02/27"
+output:
+  word_document: default
+  html_document: default
+---
+
+```{r}
+library(MASS)
+library(tidyverse)
+library(caret)
+library(glmnet)
+library(caTools)
+```
+
+Question 1
+
+```{r}
+data("Boston", package = "MASS")
+str(Boston) # the response variable is 'medv' and the other 13 are used to fit the model
+set.seed(123)
+training.samples <- Boston$medv %>% createDataPartition(p = 0.75, list = FALSE)
+train.data  <- Boston[training.samples, ]
+test.data <- Boston[-training.samples, ]
+str(train.data) #381 obs
+str(test.data) #125 obs
+```
+
+Question 2
+
+```{r}
+x <- model.matrix(medv~., train.data)[,-1]
+y <- train.data$medv
+cv <- cv.glmnet(x, y, alpha = 0) # Does k-fold cross-validation for glmnet, produces a plot, and returns a value for lambda (and gamma if relax=TRUE)
+cv$lambda.min
+```
+
+Best lambda for ridge regression is 0.6490823
+
+```{r}
+model <- glmnet(x, y, alpha = 0, lambda = cv$lambda.min) # alpha=0: ridge
+coef(model)
+```
+
+
+```{r}
+x.test <- model.matrix(medv ~., test.data)[,-1]
+predictions <- model %>% predict(x.test) %>% as.vector()
+data.frame(
+  RMSE = RMSE(predictions, test.data$medv),
+  Rsquare = R2(predictions, test.data$medv)
+)
+```
+RMSE is 6.635525 and coefficient of determination is 0.6626213.
+
+Question 3
+```{r}
+cv <- cv.glmnet(x, y, alpha = 1)
+cv$lambda.min
+```
+
+Best lambda for LASSO is 0.02943509
+
+```{r}
+model <- glmnet(x, y, alpha = 1, lambda = cv$lambda.min) # alpha=1: lasso
+coef(model)
+```
+
+```{r}
+x.test <- model.matrix(medv ~., test.data)[,-1]
+predictions <- model %>% predict(x.test) %>% as.vector()
+```
+
+```{r}
+data.frame(
+  RMSE = RMSE(predictions, test.data$medv),
+  Rsquare = R2(predictions, test.data$medv)
+)
+```
+RMSE is 6.472275 and coefficient of determination is 0.6749717.
+
+Question 4
+```{r}
+model <- train(
+  medv ~., data = train.data, method = "glmnet",
+  trControl = trainControl("cv", number = 10),
+  tuneLength = 10
+)
+model$bestTune
+```
+
+```{r}
+coef(model$finalModel, model$bestTune$lambda)
+```
+
+```{r}
+x.test <- model.matrix(medv ~., test.data)[,-1]
+predictions <- model %>% predict(x.test)
+data.frame(
+  RMSE = RMSE(predictions, test.data$medv),
+  Rsquare = R2(predictions, test.data$medv)
+)
+```
+RMSE is 6.433159 and coefficient of determination is 0.6781032
+
+Different way spliting data and randomForest function
+**Use the following function will get a different result. Both are correct.**
+
+Question 1
+
+```{r}
+set.seed(123)
+split <- sample.split(1:dim(Boston)[1], SplitRatio = 0.75)
+train.data <- Boston[split,]
+test.data <- Boston[!split,]
+str(train.data) # 379
+str(test.data) # 127
+```
+
+Question 2
+
+```{r}
+x <- model.matrix(medv~., train.data)[,-1]
+y <- train.data$medv
+set.seed(123) 
+cv <- cv.glmnet(x, y, alpha = 0)
+cv$lambda.min
+```
+Best lambda for ridge regression is 0.6842583
+
+```{r}
+model <- glmnet(x, y, alpha = 0, lambda = cv$lambda.min)
+coef(model)
+```
+
+```{r}
+x.test <- model.matrix(medv ~., test.data)[,-1]
+predictions <- model %>% predict(x.test) %>% as.vector()
+data.frame(
+  RMSE = RMSE(predictions, test.data$medv),
+  Rsquare = R2(predictions, test.data$medv)
+)
+```
+RMSE is 4.602301 and coefficient of determination is 0.7063957.
+
+Question 3
+```{r}
+set.seed(123) 
+cv <- cv.glmnet(x, y, alpha = 1)
+cv$lambda.min
+```
+
+Best lambda for LASSO is 0.0147419
+
+```{r}
+model <- glmnet(x, y, alpha = 1, lambda = cv$lambda.min)
+coef(model)
+```
+
+```{r}
+x.test <- model.matrix(medv ~., test.data)[,-1]
+predictions <- model %>% predict(x.test) %>% as.vector()
+```
+
+```{r}
+data.frame(
+  RMSE = RMSE(predictions, test.data$medv),
+  Rsquare = R2(predictions, test.data$medv)
+)
+```
+RMSE is 4.66836 and coefficient of determination is 0.6959263.
+
+Question 4
+```{r}
+set.seed(123)
+model <- train(
+  medv ~., data = train.data, method = "glmnet",
+  trControl = trainControl("cv", number = 10),
+  tuneLength = 10
+)
+model$bestTune
+```
+
+```{r}
+coef(model$finalModel, model$bestTune$lambda)
+```
+
+```{r}
+x.test <- model.matrix(medv ~., test.data)[,-1]
+predictions <- model %>% predict(x.test)
+data.frame(
+  RMSE = RMSE(predictions, test.data$medv),
+  Rsquare = R2(predictions, test.data$medv)
+)
+```
+RMSE is 4.63037 and coefficient of determination is 0.7010882

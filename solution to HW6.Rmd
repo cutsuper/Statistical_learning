@@ -1,0 +1,104 @@
+---
+title: "Solution to Neural Networks, HW6"
+author: "Your name"
+date: "mm/dd/yyyy"
+output: word_document
+---
+
+Q1
+```{r}
+if (!requireNamespace("tidyverse")) install.packages('tidyverse')
+if (!requireNamespace("caret")) install.packages('caret')
+if (!requireNamespace("neuralnet")) install.packages('neuralnet')
+if (!requireNamespace("keras")) install.packages('keras')
+if (!requireNamespace("e1071")) install.packages('e1071')
+
+library(tidyverse)
+library(caret)
+library(neuralnet)
+library(keras)
+library(e1071)
+
+data <- read.csv('Titanic.csv')
+data <- subset(data, select = -c(PassengerId,Name,Ticket,Cabin))
+# Remember we have added "PassengerId" into the removal list
+data <- subset(data, is.na(Age) == FALSE)
+data$Embarked[data$Embarked == ""] =NA
+data <- subset(data, is.na(Embarked) == FALSE)
+data <- model.matrix(~., data = data)[,-1]
+data <- data.frame(data)
+dim(data)[1]
+# 712 passengers are left after this step
+
+set.seed(123)
+training.samples <- data$Survived %>%
+  createDataPartition(p = 0.75, list = FALSE)
+train.data  <- data[training.samples, ]
+test.data <- data[-training.samples, ]
+str(train.data) # 534 obs
+str(test.data) # 178 obs
+```
+
+Q2
+```{r}
+set.seed(123)
+model = neuralnet(Survived~., data = train.data, hidden = 0, err.fct = "sse", linear.output = F)
+plot(model, rep = "best")
+
+probabilities = predict(model, test.data)
+predicted.classes = ifelse(probabilities > 0.5, 1, 0)
+
+confusionMatrix(factor(predicted.classes), factor(test.data$Survived), positive = "1")
+```
+
+Q3
+```{r}
+set.seed(123)
+model = neuralnet(Survived~., data = train.data, hidden = 0, err.fct = "ce", linear.output = F)
+plot(model, rep = "best")
+
+probabilities = predict(model, test.data)
+predicted.classes = ifelse(probabilities > 0.5, 1, 0)
+
+confusionMatrix(factor(predicted.classes), factor(test.data$Survived), positive = "1")
+```
+
+Q4
+```{r}
+set.seed(123)
+model = glm(Survived~., family = binomial, data = train.data)
+
+model
+
+probabilities = model %>% predict(test.data, type = "response")
+predicted.classes = ifelse(probabilities > 0.5, 1, 0)
+
+confusionMatrix(factor(predicted.classes), factor(test.data$Survived), positive = "1")
+```
+The Perceotron model using the loss function of "ce" resembles the logistic model better.
+
+Q5
+```{r}
+set.seed(123)
+model = neuralnet(Survived~., data = train.data, hidden = 3, err.fct = "sse", linear.output = F)
+plot(model, rep = "best")
+
+probabilities = predict(model, test.data)
+predicted.classes = ifelse(probabilities > 0.5, 1, 0)
+
+confusionMatrix(factor(predicted.classes), factor(test.data$Survived), positive = "1")
+```
+The Perceotron model with 3 neurons in each layer is better.
+
+Q6
+```{r}
+set.seed(123)
+model = neuralnet(Survived~., data = train.data, hidden = 3, err.fct = "ce", linear.output = F)
+plot(model, rep = "best")
+
+probabilities = predict(model, test.data)
+predicted.classes = ifelse(probabilities > 0.5, 1, 0)
+
+confusionMatrix(factor(predicted.classes), factor(test.data$Survived), positive = "1")
+```
+The Perceotron model with 3 neurons in each layer is better.

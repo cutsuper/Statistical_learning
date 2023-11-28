@@ -1,0 +1,125 @@
+---
+title: "Solution of Clustering exercise"
+author: "Weihao Wang"
+date: "2023-04-23"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+1. pimaindiansdiabetes2 data
+
+(1)K-mean; Hierarchical: (2)Ward, (3)Single-linkage, (4)Complete-linkage, (5)Average-linkage, (6)Centroid
+
+```{r}
+#install.packages("mlbench")
+data("PimaIndiansDiabetes2", package = "mlbench")
+pima <- na.omit(PimaIndiansDiabetes2)
+head(pima)
+
+# To predict the diabetes diagnostics
+data = scale(pima[,-9])
+
+library("cluster")
+library("factoextra")
+library("magrittr")
+
+# 3 ways to draw scree-plot
+# Scree-plot
+wss <- (nrow(data)-1)*sum(apply(data,2,var))
+for (i in 2:8) wss[i] <- sum(kmeans(data,
+   centers=i)$withinss)
+plot(1:8, wss, type="b", xlab="Number of Clusters",
+  ylab="Within groups sum of squares")
+# Scree-plot
+pc = princomp(data, cor = T)
+screeplot(pc, type = "lines")
+# Scree-plot
+library(factoextra)
+fviz_eig(pc)
+
+# 1. K means
+k.means.fit <- kmeans(data, 2) 
+library(cluster)
+clusplot(data, k.means.fit$cluster, main='2D representation of the Cluster solution',color=TRUE, shade=TRUE,labels=2, lines=0)
+table(pima[,9],factor(k.means.fit$cluster, levels = c('2','1'), labels = c('neg','pos')))
+
+# 2. H.Ward
+d <- dist(data, method = "euclidean")
+H.fit <- hclust(d, method="ward.D")
+plot(H.fit)
+groups <- cutree(H.fit, k=2)
+rect.hclust(H.fit, k=2, border="red")
+table(pima[,9],factor(groups, levels = c('1','2'), labels = c('neg','pos')))
+clusplot(data, groups, main='2D representation of the Cluster solution',color=TRUE, shade=TRUE,labels=2, lines=0)
+
+
+# 3. H.Single
+H.fit <- hclust(d, method="single")
+plot(H.fit)
+groups <- cutree(H.fit, k=2)
+rect.hclust(H.fit, k=2, border="red")
+table(pima[,9],factor(groups, levels = c('1','2'), labels = c('neg','pos')))
+clusplot(data, groups, main='2D representation of the Cluster solution',color=TRUE, shade=TRUE,labels=2, lines=0)
+
+# 4. H.Complete
+H.fit <- hclust(d, method="complete")
+plot(H.fit)
+groups <- cutree(H.fit, k=2)
+rect.hclust(H.fit, k=2, border="red")
+table(pima[,9],factor(groups, levels = c('1','2'), labels = c('neg','pos')))
+clusplot(data, groups, main='2D representation of the Cluster solution',color=TRUE, shade=TRUE,labels=2, lines=0)
+
+# 5. H.Average
+H.fit <- hclust(d, method="average")
+plot(H.fit)
+groups <- cutree(H.fit, k=2)
+rect.hclust(H.fit, k=2, border="red")
+table(pima[,9],factor(groups, levels = c('1','2'), labels = c('neg','pos')))
+clusplot(data, groups, main='2D representation of the Cluster solution',color=TRUE, shade=TRUE,labels=2, lines=0)
+
+# 6.Centroid
+H.fit <- hclust(d, method="centroid")
+plot(H.fit)
+groups <- cutree(H.fit, k=2)
+rect.hclust(H.fit, k=2, border="red")
+table(pima[,9],factor(groups, levels = c('1','2'), labels = c('neg','pos')))
+clusplot(data, groups, main='2D representation of the Cluster solution',color=TRUE, shade=TRUE,labels=2, lines=0)
+
+
+
+# Comparison
+# K-means: 290/392
+# H.Ward: 273/392
+# H.Single: 263/392
+# H.Complete: 264/392
+# H.Average: 264/392
+# H.Centroid: 263/392
+```
+
+
+2. PCA
+
+```{r}
+#install.packages("devtools")
+library(devtools)
+#install_github("vqv/ggbiplot")
+library(ggbiplot)	 	
+
+mtcars.pca = prcomp(mtcars[,c(1:7,10,11)], center = TRUE,scale. = TRUE)
+summary(mtcars.pca)
+# Proportion of variance
+# You obtain 9 principal components, which you call PC1-9. Each of these explains a percentage of the total variation in the dataset. That is to say: PC1 explains 63% of the total variance, which means that nearly two-thirds of the information in the dataset (9 variables) can be encapsulated by just that one Principal Component. PC2 explains 23% of the variance. So, by knowing the position of a sample in relation to just PC1 and PC2, you can get a very accurate view on where it stands in relation to other samples, as just PC1 and PC2 can explain 86% of the variance.
+ggbiplot(mtcars.pca)
+# The axes are seen as arrows originating from the center point. Here, you see that the variables hp, cyl, and disp all contribute to PC1, with higher values in those variables moving the samples to the right on this plot. This lets you see how the data points relate to the axes, but it's not very informative without knowing which point corresponds to which sample (car).
+ggbiplot(mtcars.pca, labels=rownames(mtcars))
+# This will name each point with the name of the car in question
+# Now you can see which cars are similar to one another. For example, the Maserati Bora, Ferrari Dino and Ford Pantera L all cluster together at the top. This makes sense, as all of these are sports cars.
+mtcars.country <- c(rep("Japan", 3), rep("US",4), rep("Europe", 7),rep("US",3), "Europe", rep("Japan", 3), rep("US",4), rep("Europe", 3), "US", rep("Europe", 3))
+ggbiplot(mtcars.pca,ellipse=TRUE,  labels=rownames(mtcars), groups=mtcars.country)
+# the American cars form a distinct cluster to the right. Looking at the axes, you see that the American cars are characterized by high values for cyl, disp, and wt. Japanese cars, on the other hand, are characterized by high mpg. European cars are somewhat in the middle and less tightly clustered than either group.
+ggbiplot(mtcars.pca,ellipse=TRUE, choices=c(3,4), labels=rownames(mtcars), groups=mtcars.country)
+ggbiplot(mtcars.pca,ellipse=TRUE,circle=TRUE, labels=rownames(mtcars), groups=mtcars.country)
+
+mtcars.pca$rotation[,1] #PC1
+```

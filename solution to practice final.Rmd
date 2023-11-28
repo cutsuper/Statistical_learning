@@ -1,0 +1,483 @@
+---
+title: "solution to practice fianl exam"
+output: pdf_document
+---
+
+# Part 1
+
+## Loading data and packages
+```{r}
+if (!requireNamespace("tidyverse")) install.packages('tidyverse')
+if (!requireNamespace("caret")) install.packages('caret')
+if (!requireNamespace("neuralnet")) install.packages('neuralnet')
+if (!requireNamespace("keras")) install.packages('keras')
+if (!requireNamespace("randomForest")) install.packages('randomForest')
+if (!requireNamespace("rpart")) install.packages('rpart')
+if (!requireNamespace("rattle")) install.packages('rattle')
+
+library(tidyverse)
+library(caret)
+library(neuralnet)
+library(keras)
+library(randomForest)
+library(rpart)
+library(rattle)
+```
+
+## Question 1
+
+```{r}
+unknown <- read.csv('Unknown.csv')
+unknown <- na.omit(unknown)
+dim(unknown)[1]
+```
+
+```{r}
+set.seed(123)
+training.samples <- unknown$y %>% createDataPartition(p = 0.75, list = FALSE)
+train.data  <- unknown[training.samples, ]
+test.data <- unknown[-training.samples, ]
+```
+
+## Question 2
+
+### 2.a
+
+```{r}
+set.seed(123)
+model <- neuralnet(y~., data = train.data, hidden = 3, err.fct = "sse", linear.output = F)
+plot(model, rep = "best")
+```
+
+```{r}
+probabilities <- model %>% predict(test.data) %>% as.vector()
+predicted.y <- ifelse(probabilities > 0.5, 1, 0)
+confusionMatrix(factor(predicted.y), factor(test.data$y), positive = '1')
+```
+
+### 2.b
+
+```{r}
+set.seed(123)
+model <- neuralnet(y~., data = train.data, hidden = 3, err.fct = "ce", linear.output = F)
+plot(model, rep = "best")
+```
+
+```{r}
+probabilities <- model %>% predict(test.data)
+predicted.y <- ifelse(probabilities > 0.5, 1, 0)
+nn.y = factor(predicted.y)
+confusionMatrix(factor(predicted.y), factor(test.data$y), positive = '1')
+```
+
+### 2.c
+
+Based on the overall prediction accuracy on the testing set, the model from 2.b is better.
+
+## Question 3
+
+### 3.a
+```{r}
+########### To conduct the random forest, need factorize the response data, or will become regression random forest###########
+train.data$y <- factor(train.data$y)
+test.data$y <- factor(test.data$y)
+##################################
+
+set.seed(123)
+model <- train(
+  y ~., data = train.data, method = "rf",
+  trControl = trainControl("cv", number = 10),
+  importance = TRUE
+  )
+# Best tuning parameter
+model$bestTune
+```
+
+```{r}
+model$finalModel
+```
+
+Overall Accuracy
+```{r}
+(2011+99)/(2011+99+196+99)
+```
+
+Sensitivity
+```{r}
+1160/1356
+```
+
+Specificity
+```{r}
+2011/2110
+```
+
+### 3.b
+
+```{r}
+pred <- model %>% predict(test.data)
+rf.y = pred
+confusionMatrix(pred, test.data$y, positive = '1')
+```
+
+### 3.c
+
+```{r}
+# Plot MeanDecreaseAccuracy
+varImpPlot(model$finalModel, type = 1)
+# Plot MeanDecreaseGini
+varImpPlot(model$finalModel, type = 2)
+```
+
+### 3.d
+
+```{r}
+varImp(model, type = 1)
+```
+
+## Question 4
+
+```{r}
+set.seed(123)
+model <- train(
+  y ~., data = train.data, method = "svmRadial",
+  trControl = trainControl("cv", number = 10),
+  tuneLength = 10
+  )
+plot(model)
+```
+
+```{r}
+model$bestTune
+```
+
+```{r}
+svm.y <- predict(model, newdata = test.data)
+confusionMatrix(svm.y, test.data$y)
+```
+
+## Question 5
+
+```{r}
+pred = cbind(nn.y, rf.y, svm.y)
+pred.m = apply(pred,1,function(x) names(which.max(table(x)))) # Majority vote
+pred.m = factor(pred.m, levels = c('1','2'), labels = c('0','1'))
+
+confusionMatrix(pred.m, test.data$y, positive = '1')
+```
+
+# Part 2
+
+```{r}
+if (!requireNamespace("tidyquant")) install.packages('tidyquant')
+if (!requireNamespace("magrittr")) install.packages('magrittr')
+if (!requireNamespace("tensorflow")) install.packages('tensorflow')
+if (!requireNamespace("zoo")) install.packages('zoo')
+library(tidyquant)
+library(magrittr)
+library(tensorflow)
+library(zoo)
+```
+
+## Question 1
+
+```{r}
+data <- read.csv('AMZN.csv', header = T)
+# transform the data type from 'chr' to 'Date'
+data$Date = as.Date(data$Date)
+
+# visualize our dataset
+knitr::kable(head(data))
+ggplot(data, aes(x=Date, y = Close)) + geom_line()
+
+# normalize the stock price by using the 'min-max scaler'
+data$min_lagged = lag(data$Low)
+data$max_lagged = lag(data$High)
+data$Close_norm = (data$Close - data$min_lagged) / (data$max_lagged - data$min_lagged)
+model_data = matrix(data$Close_norm[-1])
+
+# The last three scalded close prices
+knitr::kable(tail(model_data,5))
+```
+
+## Question 2
+
+```{r}
+train_data = head(model_data,-5)
+test_data = tail(model_data, 10)
+cat(dim(train_data)[1], 'days are divided into the training set.')
+```
+
+## Question 3
+
+```{r}
+prediction = 5
+lag = prediction
+# Training X
+# we lag the data 5 times and arrange that into columns
+train_X = t(sapply(
+    1:(length(train_data) - lag - prediction + 1),
+    function(x) train_data[x:(x + lag - 1), 1]
+  ))
+# now we transform it into 3D form
+train_X <- array(
+    data = as.numeric(unlist(train_X)),
+    dim = c(
+        nrow(train_X),
+        lag,
+        1
+    )
+)
+# Training y
+train_y <- t(sapply(
+    (1 + lag):(length(train_data) - prediction + 1),
+    function(x) train_data[x:(x + prediction - 1)]
+))
+train_y <- array(
+    data = as.numeric(unlist(train_y)),
+    dim = c(
+        nrow(train_y),
+        prediction,
+        1
+    )
+)
+# Testing X
+test_X = t(sapply(
+    1:(length(test_data) - lag - prediction + 1),
+    function(x) test_data[x:(x + lag - 1), 1]
+  ))
+test_X <- array(
+    data = as.numeric(unlist(test_X)),
+    dim = c(
+        nrow(test_X),
+        lag,
+        1
+    )
+)
+# Testing y
+test_y <- t(sapply(
+    (1 + lag):(length(test_data) - prediction + 1),
+    function(x) test_data[x:(x + prediction - 1)]
+))
+test_y <- array(
+    data = as.numeric(unlist(test_y)),
+    dim = c(
+        nrow(test_y),
+        prediction,
+        1
+    )
+)
+dim(train_X)
+dim(train_y)
+dim(test_X)
+dim(test_y)
+```
+
+## Question 4
+
+```{r}
+set_random_seed(123)
+model <- keras_model_sequential()
+model %>%
+  layer_lstm(units = 100, input_shape = dim(train_X)[2:3])
+model %>%
+  layer_dense(units = dim(test_y)[2])
+
+summary(model)
+model %>% compile(loss = 'mse',
+                  optimizer = 'adam',
+                  metrics = 'mse')
+history <- model %>% fit(
+  x = train_X,
+  y = train_y,
+  batch_size =16,
+  epochs = 50,
+  validation_split = 0.1,
+  shuffle = FALSE
+)
+
+preds_norm = t(predict(model, test_X))
+preds_complete = cbind(preds_norm, tail(data, prediction))
+preds = preds_complete$preds_norm*(preds_complete$max_lagged - preds_complete$min_lagged) + preds_complete$min_lagged
+predictions = data.frame(predictions = preds, true = preds_complete$Close, date = preds_complete$Date)
+# Test MSE
+(MSE.lstm = RMSE(predictions$true, predictions$predictions)^2)
+
+# Plot 3-days forecast
+ggplot(data = predictions, aes(x = date)) +
+  geom_line(aes(y = predictions, color = 'predictions')) +
+  geom_line(aes(y = true, color = 'true'))
+
+
+
+# stock price of 2022-05-16
+preds_norm1 = predict(model, test_y)[1]
+(preds1 = preds_norm1*(data$High[252] - data$Low[252]) + data$Low[252])
+```
+
+## Question 5
+
+```{r}
+set_random_seed(123)
+model <- keras_model_sequential()
+model %>%
+  layer_simple_rnn(units = 100, input_shape = dim(train_X)[2:3])
+model %>%
+  layer_dense(units = dim(test_y)[2])
+
+summary(model)
+model %>% compile(loss = 'mse',
+                  optimizer = 'adam',
+                  metrics = c('mse'))
+history <- model %>% fit(
+  x = train_X,
+  y = train_y,
+  batch_size =16,
+  epochs = 50,
+  validation_split = 0.1,
+  shuffle = FALSE
+)
+
+preds_norm = t(predict(model, test_X))
+preds_complete = cbind(preds_norm, tail(data, prediction))
+preds = preds_complete$preds_norm*(preds_complete$max_lagged - preds_complete$min_lagged) + preds_complete$min_lagged
+predictions = data.frame(predictions = preds, true = preds_complete$Close, date = preds_complete$Date)
+# Test MSE
+(MSE.rnn = RMSE(predictions$true, predictions$predictions)^2)
+
+# Plot 3-days forecast
+ggplot(data = predictions, aes(x = date)) +
+  geom_line(aes(y = predictions, color = 'predictions')) +
+  geom_line(aes(y = true, color = 'true'))
+
+
+# stock price of 2022-05-16
+preds_norm1 = predict(model, test_y)[1]
+(preds1 = preds_norm1*(data$High[252] - data$Low[252]) + data$Low[252])
+```
+
+## Question 6
+
+```{r}
+MSE.lstm
+MSE.rnn
+```
+
+LSTM is better for this dataset.
+
+# Part 3
+
+## Load packages and data
+```{r}
+if (!requireNamespace("factoextra")) install.packages('factoextra')
+if (!requireNamespace("cluster")) install.packages('cluster')
+if (!requireNamespace("devtools")) install.packages('devtools')
+if (!requireNamespace("ggbiplot")) install.packages('ggbiplot')
+
+library(factoextra)
+library(cluster)
+library(devtools)
+library(ggbiplot)	
+```
+
+## Question 1
+
+```{r}
+str(iris)
+data = na.omit(iris)
+data = scale(data[,-5])
+
+# (a)-(d)
+pc = princomp(data, cor = T)
+# Scree-plot
+fviz_eig(pc)
+# 3 clusters looks reasonable
+
+# K means
+k.means.fit <- kmeans(data, 3) 
+clusplot(data, k.means.fit$cluster, main='2D representation of the Cluster solution',color=TRUE, shade=TRUE,labels=2, lines=0)
+table(k.means.fit$cluster, iris$Species)
+# confusion matrix:
+# 50 0 0
+# 0 39 14
+# 0 11 36
+# accuracy = (50+39+36)/150 = 125/150
+
+# H.Ward
+d <- dist(data, method = "euclidean")
+H.fit <- hclust(d, method="ward.D")
+plot(H.fit)
+rect.hclust(H.fit, k=3, border="red")
+groups <- cutree(H.fit, k=3)
+clusplot(data, groups, main='2D representation of the Cluster solution',color=TRUE, shade=TRUE,labels=2, lines=0)
+clusters = factor(groups, levels = 1:3, labels = c("setosa", "versicolor",  "virginica"))
+table(iris[,5], clusters)
+# accuracy = (49+50+27)/150 = 126/150
+
+# H.Single
+H.fit <- hclust(d, method="single")
+plot(H.fit)
+rect.hclust(H.fit, k=3, border="red")
+groups <- cutree(H.fit, k=3)
+clusplot(data, groups, main='2D representation of the Cluster solution',color=TRUE, shade=TRUE,labels=2, lines=0)
+clusters = factor(groups, levels = 1:3, labels = c("setosa", "versicolor",  "virginica"))
+table(iris[,5], clusters)
+# accuracy = 99/150
+
+# H.Complete
+H.fit <- hclust(d, method="complete")
+plot(H.fit)
+rect.hclust(H.fit, k=3, border="red")
+groups <- cutree(H.fit, k=3)
+clusplot(data, groups, main='2D representation of the Cluster solution',color=TRUE, shade=TRUE,labels=2, lines=0)
+clusters = factor(groups, levels = 1:3, labels = c("setosa", "versicolor",  "virginica"))
+table(iris[,5], clusters)
+# accuracy = 118/150
+
+# H.Average
+H.fit <- hclust(d, method="average")
+plot(H.fit)
+rect.hclust(H.fit, k=3, border="red")
+groups <- cutree(H.fit, k=3)
+clusplot(data, groups, main='2D representation of the Cluster solution',color=TRUE, shade=TRUE,labels=2, lines=0)
+clusters = factor(groups, levels = 1:3, labels = c("setosa", "versicolor",  "virginica"))
+table(iris[,5], clusters)
+# accuracy = 103/150
+
+# H.Centroid
+H.fit <- hclust(d, method="centroid")
+plot(H.fit)
+rect.hclust(H.fit, k=3, border="red")
+groups <- cutree(H.fit, k=3)
+clusplot(data, groups, main='2D representation of the Cluster solution',color=TRUE, shade=TRUE,labels=2, lines=0)
+clusters = factor(groups, levels = 1:3, labels = c("setosa", "versicolor",  "virginica"))
+table(iris[,5], clusters)
+# accuracy = 99/150
+
+# (e) Ward's method is a little bit better than K-means
+
+# (f) Comparison:
+# Ward > K-means > Complete > Average > Single = Centroid
+# I would recommend the cluster analysis as a good way to deal with this IRIS dataset.
+# K-means and complete methods are usually great, but here Ward method is the best one from the confusion matrix.
+```
+
+## Question 2
+
+```{r}
+#(a)
+iris.pca = prcomp(data, center = TRUE,scale. = TRUE)
+summary(iris.pca)
+#(b)
+ggbiplot(iris.pca)
+#(c)
+ggbiplot(iris.pca, ellipse=TRUE, groups=iris$Species)
+#(d)
+iris.pca$rotation[,1] #PC1
+```
+(e)
+
+I recommend the PCA method as an efficient way here.
+It can reduce the dimension of the data, and the first two PCs have a cumulative proportion of variance over 95%, which means this two PCs contains most of the information of the original variables.
+Additionally, The bi-plot created in part c would allows the biologist to see the groupings of species clearly.
+
